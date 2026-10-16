@@ -1,0 +1,9 @@
+RSS NewsBar v0.2.1 beta
+
+安装：
+1. 将“RSS NewsBar”拖入旁边的“Applications”文件夹。
+2. 在“应用程序”中打开 RSS NewsBar。
+
+这是未经过 Apple 公证的内部测试版本。如果 macOS 阻止首次启动，请在 Finder 中右键点击应用并选择“打开”，然后再次确认。
+
+应用启动后常驻菜单栏，不会显示 Dock 图标。左键点击新闻打开原文，右键点击滚动栏打开菜单和设置。
