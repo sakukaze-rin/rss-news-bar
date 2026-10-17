@@ -1,10 +1,12 @@
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     @ObservedObject var store: FeedStore
     @State private var newName = ""
     @State private var newURL = ""
     @State private var selectedFeedIDs = Set<UUID>()
+    @State private var inspectedFeed: RSSFeed?
 
     var body: some View {
         TabView {
@@ -13,7 +15,10 @@ struct SettingsView: View {
             appearanceTab.tabItem { Label("外观", systemImage: "textformat") }
         }
         .padding(20)
-        .frame(minWidth: 580, minHeight: 500)
+        .frame(minWidth: 660, minHeight: 530)
+        .sheet(item: $inspectedFeed) { feed in
+            FeedCacheView(store: store, feed: feed)
+        }
     }
 
     private var feedsTab: some View {
@@ -34,6 +39,11 @@ struct SettingsView: View {
                         Spacer()
                         Stepper("\(feed.refreshMinutes) 分钟", value: $feed.refreshMinutes, in: 1...1440, step: 5)
                         Picker("范围", selection: $feed.timeRangeDays) { Text("1 天").tag(1); Text("3 天").tag(3); Text("7 天").tag(7) }.frame(width: 80)
+                        Button { inspectedFeed = feed } label: {
+                            Image(systemName: "list.bullet.rectangle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("查看 \(feed.displayName) 的缓存条目")
                     }
                 }.onDelete(perform: store.deleteFeed).onMove(perform: store.moveFeed)
             }.listStyle(.inset)
@@ -81,5 +91,60 @@ struct SettingsView: View {
             }
             Section("来源标识") { Text("每条消息前会显示 RSS 源名称；后续可扩展为自动抓取 favicon，并允许为每个源指定自定义名称。") }
         }
+    }
+}
+
+private struct FeedCacheView: View {
+    @ObservedObject var store: FeedStore
+    let feed: RSSFeed
+    @Environment(\.dismiss) private var dismiss
+
+    private var items: [RSSHeadline] { store.cachedHeadlines(for: feed) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(feed.displayName).font(.title2.bold())
+                    Text("缓存 \(items.count) 条 · \(feed.normalizedURL)").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { store.refresh(feed: feed) } label: { Label("刷新此源", systemImage: "arrow.clockwise") }
+                Button("关闭") { dismiss() }
+            }
+
+            Table(items) {
+                TableColumn("标题") { headline in
+                    Button(headline.title) { open(headline) }
+                        .buttonStyle(.plain)
+                        .foregroundColor(headline.link == nil ? Color.primary : Color.accentColor)
+                        .help(headline.link == nil ? "此条目没有链接" : "使用默认浏览器打开")
+                }
+                TableColumn("发布时间") { headline in
+                    Text(headline.publishedAt?.formatted(date: .numeric, time: .shortened) ?? "未知")
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 130, ideal: 155)
+                TableColumn("打开") { headline in
+                    Button { open(headline) } label: { Image(systemName: "arrow.up.right.square") }
+                        .buttonStyle(.borderless)
+                        .disabled(headline.link == nil)
+                }
+                .width(42)
+            }
+
+            if let status = store.feedStatuses[feed.id] {
+                Text(status).font(.caption).foregroundStyle(status.hasPrefix("失败") ? .red : .secondary)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 760, minHeight: 500)
+    }
+
+    private func open(_ headline: RSSHeadline) {
+        guard let link = headline.link,
+              let url = URL(string: link),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        NSWorkspace.shared.open(url)
     }
 }

@@ -1,4 +1,4 @@
-RSS NewsBar v0.2.1 beta
+RSS NewsBar v0.2.2 beta
 
 安装：
 1. 将“RSS NewsBar”拖入旁边的“Applications”文件夹。

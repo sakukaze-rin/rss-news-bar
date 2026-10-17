@@ -5,7 +5,7 @@ enum RSSFeedService {
         guard let url = URL(string: feed.normalizedURL) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
-        request.setValue("RSSNewsBar/0.2-beta", forHTTPHeaderField: "User-Agent")
+        request.setValue("RSSNewsBar/0.2.2-beta", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else { throw URLError(.badServerResponse) }
         return try RSSParser(data: data, feed: feed).parse()
@@ -55,7 +55,7 @@ final class RSSParser: NSObject, XMLParserDelegate {
         case "link": link = value.isEmpty ? linkAttribute : value; linkAttribute = nil
         case "pubdate", "published", "updated", "dc:date": date = RSSParser.parseDate(value)
         case "item", "entry":
-            if !title.isEmpty { items.append(RSSHeadline(title: title, link: link, publishedAt: date, sourceName: feed.displayName)) }
+            if !title.isEmpty { items.append(RSSHeadline(title: title, link: link, publishedAt: date, sourceName: feed.displayName, sourceID: feed.id)) }
             inItem = false
         default: break
         }

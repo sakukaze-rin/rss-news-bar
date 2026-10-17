@@ -26,13 +26,15 @@ struct RSSHeadline: Codable, Identifiable, Equatable {
     let link: String?
     let publishedAt: Date?
     let sourceName: String
+    let sourceID: UUID?
 
-    init(id: UUID = UUID(), title: String, link: String? = nil, publishedAt: Date? = nil, sourceName: String) {
+    init(id: UUID = UUID(), title: String, link: String? = nil, publishedAt: Date? = nil, sourceName: String, sourceID: UUID? = nil) {
         self.id = id
         self.title = title
         self.link = link
         self.publishedAt = publishedAt
         self.sourceName = sourceName
+        self.sourceID = sourceID
     }
 
     var playbackKey: String {

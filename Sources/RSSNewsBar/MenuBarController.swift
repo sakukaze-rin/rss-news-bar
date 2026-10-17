@@ -100,7 +100,7 @@ final class TickerView: NSView {
 @MainActor
 final class MenuBarController: NSObject, NSWindowDelegate {
     private static let headlineSeparator = "     ◆     "
-    private static let versionLabel = "RSS NewsBar · v0.2.1 beta"
+    private static let versionLabel = "RSS NewsBar · v0.2.2 beta"
 
     private struct TickerQueueItem {
         let key: String
@@ -119,7 +119,7 @@ final class MenuBarController: NSObject, NSWindowDelegate {
     private var targetVelocityScale: CGFloat = 1
     private var tickerQueue: [TickerQueueItem] = []
     private var tickerHistory: [TickerQueueItem] = []
-    private var recentHeadlineKeys: [String] = []
+    private var randomCycleKeys: Set<String> = []
     private var lastRandomSource: String?
     private var fadeMenuItem: NSMenuItem?
     private var minimizeMenuItem: NSMenuItem?
@@ -174,7 +174,7 @@ final class MenuBarController: NSObject, NSWindowDelegate {
     }
 
     private func advanceTicker() {
-        guard !store.headlines.isEmpty else {
+        guard !store.playbackHeadlines.isEmpty else {
             tickerQueue.removeAll()
             ticker.text = store.isRefreshing ? "正在刷新 RSS…" : "RSS NewsBar · 暂无新闻"
             ticker.scrollOffset = 0
@@ -207,45 +207,45 @@ final class MenuBarController: NSObject, NSWindowDelegate {
     }
 
     private func nextHeadline() -> RSSHeadline {
+        let availableHeadlines = store.playbackHeadlines
         guard store.settings.randomOrder else {
-            let headline = store.headlines[headlineIndex % store.headlines.count]
+            let headline = availableHeadlines[headlineIndex % availableHeadlines.count]
             headlineIndex += 1
             return headline
         }
 
         let queuedKeys = Set(tickerQueue.map(\.key))
-        let recentKeys = Set(recentHeadlineKeys)
-        let groups = Dictionary(grouping: store.headlines, by: \.sourceName)
-        var sources = Array(groups.keys)
-        if sources.count > 1, let lastRandomSource {
+        var candidates = availableHeadlines.filter {
+            !queuedKeys.contains($0.playbackKey) && !randomCycleKeys.contains($0.playbackKey)
+        }
+        if candidates.isEmpty {
+            randomCycleKeys.removeAll()
+            candidates = availableHeadlines.filter { !queuedKeys.contains($0.playbackKey) }
+        }
+
+        let groups = Dictionary(grouping: candidates, by: \.sourceName)
+        var sources = groups.keys.flatMap { source -> [String] in
+            let weight = max(1, Int(Double(groups[source]?.count ?? 1).squareRoot()))
+            return Array(repeating: source, count: weight)
+        }
+        if groups.count > 1, let lastRandomSource {
             sources.removeAll { $0 == lastRandomSource }
         }
         sources.shuffle()
 
         for source in sources {
             guard let sourceHeadlines = groups[source] else { continue }
-            let freshCandidates = sourceHeadlines.filter {
-                !queuedKeys.contains($0.playbackKey) && !recentKeys.contains($0.playbackKey)
-            }
-            let candidates = freshCandidates.isEmpty
-                ? sourceHeadlines.filter { !queuedKeys.contains($0.playbackKey) }
-                : freshCandidates
-            if let headline = candidates.randomElement() {
+            if let headline = sourceHeadlines.randomElement() {
                 lastRandomSource = source
+                randomCycleKeys.insert(headline.playbackKey)
                 return headline
             }
         }
 
-        let fallback = store.headlines.filter { !queuedKeys.contains($0.playbackKey) }.randomElement()
-            ?? store.headlines.randomElement()!
+        let fallback = candidates.randomElement() ?? availableHeadlines.randomElement()!
         lastRandomSource = fallback.sourceName
+        randomCycleKeys.insert(fallback.playbackKey)
         return fallback
-    }
-
-    private func rememberRecentlyPlayed(_ key: String) {
-        recentHeadlineKeys.removeAll { $0 == key }
-        recentHeadlineKeys.append(key)
-        if recentHeadlineKeys.count > 20 { recentHeadlineKeys.removeFirst() }
     }
 
     private func segmentWidth(for item: TickerQueueItem) -> CGFloat {
@@ -259,7 +259,6 @@ final class MenuBarController: NSObject, NSWindowDelegate {
             tickerHistory.append(played)
             if tickerHistory.count > 30 { tickerHistory.removeFirst() }
             store.markPlayed(key: played.key)
-            rememberRecentlyPlayed(played.key)
             fillTickerQueue()
         }
 
@@ -308,9 +307,8 @@ final class MenuBarController: NSObject, NSWindowDelegate {
 
     private func scheduleRefresh() {
         refreshTimer?.invalidate()
-        let minutes = max(1, store.feeds.map(\.refreshMinutes).min() ?? 30)
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(minutes * 60), repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.store.refresh() }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.store.refreshDueFeeds() }
         }
     }
 
@@ -341,7 +339,7 @@ final class MenuBarController: NSObject, NSWindowDelegate {
             let view = SettingsView(store: store)
             let controller = NSHostingController(rootView: view)
             let window = NSWindow(contentViewController: controller)
-            window.title = "RSS NewsBar v0.2.1 beta 设置"; window.styleMask = [.titled, .closable, .resizable]; window.setContentSize(NSSize(width: 620, height: 560)); window.center(); window.delegate = self
+            window.title = "RSS NewsBar v0.2.2 beta 设置"; window.styleMask = [.titled, .closable, .resizable]; window.setContentSize(NSSize(width: 700, height: 590)); window.center(); window.delegate = self
             settingsWindow = window
         }
         NSApp.activate(ignoringOtherApps: true); settingsWindow?.makeKeyAndOrderFront(nil)

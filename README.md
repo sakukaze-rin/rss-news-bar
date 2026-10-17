@@ -17,7 +17,7 @@ swift run RSSNewsBar
 ```sh
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
-open "dist/RSS NewsBar_0.2.1 beta.app"
+open "dist/RSS NewsBar_0.2.2 beta.app"
 ```
 
 生成可分享的测试 DMG：
@@ -26,7 +26,7 @@ open "dist/RSS NewsBar_0.2.1 beta.app"
 ./scripts/build-dmg.sh
 ```
 
-输出位于 `dist/RSS-NewsBar-v0.2.1-beta.dmg`。安装包默认生成 Apple Silicon 与 Intel 通用应用；当前为 ad-hoc 签名的内部测试包，未使用 Apple Developer ID 公证。
+输出位于 `dist/RSS-NewsBar-v0.2.2-beta.dmg`。安装包默认生成 Apple Silicon 与 Intel 通用应用；当前为 ad-hoc 签名的内部测试包，未使用 Apple Developer ID 公证。
 
 左键点击滚动标题会用系统默认浏览器打开原文；右键点击滚动栏可以打开菜单。鼠标悬停时可使用滚轮回看或跳过新闻。
 
@@ -39,7 +39,7 @@ open "dist/RSS NewsBar_0.2.1 beta.app"
 - 手动清理标题缓存
 - 暂时最小化为单一菜单栏图标
 
-RSS 源列表会显示每个源最近一次刷新状态和获取条数，并支持多选后删除。
+RSS 源列表会显示每个源最近一次刷新状态、获取条数和最新发布时间，并支持多选后删除。点击每个源右侧的列表图标，可以用表格检查该源的全部缓存标题、发布时间并打开原文，也可以单独刷新该源。
 
 ## 设计说明
 

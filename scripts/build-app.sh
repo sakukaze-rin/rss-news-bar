@@ -3,7 +3,7 @@ set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 build_dir="$project_dir/.build"
-app_dir="$project_dir/dist/RSS NewsBar_0.2.1 beta.app"
+app_dir="$project_dir/dist/RSS NewsBar_0.2.2 beta.app"
 icon_source="$project_dir/Resources/AppIcon.png"
 
 cd "$project_dir"

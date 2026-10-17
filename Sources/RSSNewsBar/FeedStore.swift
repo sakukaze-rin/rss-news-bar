@@ -17,6 +17,7 @@ final class FeedStore: ObservableObject {
     @Published var errorMessage: String?
 
     private var refreshTask: Task<Void, Never>?
+    private var successfulRefreshDates: [UUID: Date] = [:]
 
     init() {
         feeds = Self.load([RSSFeed(name: "CNBeta", url: "https://rss.cnbeta.com.tw/"),], key: CacheStore.feedsKey)
@@ -30,29 +31,68 @@ final class FeedStore: ObservableObject {
     }
 
     func refresh() {
-        refreshTask?.cancel()
+        refresh(feeds: feeds.filter(\.enabled))
+    }
+
+    func refresh(feed: RSSFeed) {
+        refresh(feeds: [feed])
+    }
+
+    func refreshDueFeeds() {
+        let now = Date()
+        let due = feeds.filter { feed in
+            guard feed.enabled else { return false }
+            guard let lastRefresh = successfulRefreshDates[feed.id] else { return true }
+            return now.timeIntervalSince(lastRefresh) >= TimeInterval(max(1, feed.refreshMinutes) * 60)
+        }
+        guard !due.isEmpty else { return }
+        refresh(feeds: due)
+    }
+
+    func cachedHeadlines(for feed: RSSFeed) -> [RSSHeadline] {
+        headlines.filter { headline in
+            headline.sourceID == feed.id || (headline.sourceID == nil && headline.sourceName == feed.displayName)
+        }.sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
+    }
+
+    var playbackHeadlines: [RSSHeadline] {
         let activeFeeds = feeds.filter(\.enabled)
-        guard !activeFeeds.isEmpty else { return }
+        return headlines.filter { headline in
+            activeFeeds.contains { feed in
+                headline.sourceID == feed.id || (headline.sourceID == nil && headline.sourceName == feed.displayName)
+            }
+        }
+    }
+
+    private func refresh(feeds requestedFeeds: [RSSFeed]) {
+        refreshTask?.cancel()
+        guard !requestedFeeds.isEmpty else { return }
         let previousKeys = Set(headlines.map(\.playbackKey))
         isRefreshing = true
         errorMessage = nil
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            var all: [RSSHeadline] = []
+            var updatedHeadlines = self.headlines
             var failures = 0
-            for feed in activeFeeds {
+            for feed in requestedFeeds {
                 if Task.isCancelled { return }
                 self.feedStatuses[feed.id] = "刷新中…"
                 do {
                     let newItems = try await RSSFeedService.fetch(feed: feed)
-                    all.append(contentsOf: newItems)
-                    self.feedStatuses[feed.id] = "成功 · \(newItems.count) 条"
+                    updatedHeadlines.removeAll { headline in
+                        headline.sourceID == feed.id || (headline.sourceID == nil && headline.sourceName == feed.displayName)
+                    }
+                    updatedHeadlines.append(contentsOf: newItems)
+                    self.successfulRefreshDates[feed.id] = Date()
+                    let latest = newItems.compactMap(\.publishedAt).max()
+                    let latestText = latest?.formatted(date: .numeric, time: .shortened) ?? "无日期"
+                    self.feedStatuses[feed.id] = "成功 · \(newItems.count) 条 · 最新 \(latestText)"
                 } catch {
                     failures += 1
                     self.feedStatuses[feed.id] = "失败 · \(Self.describe(error))"
                 }
             }
-            let sorted = all.sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
+            let sorted = updatedHeadlines.sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
             let refreshedKeys = Set(sorted.map(\.playbackKey))
             self.newHeadlineKeys.formIntersection(refreshedKeys)
             self.newHeadlineKeys.formUnion(refreshedKeys.subtracting(previousKeys))
@@ -60,7 +100,7 @@ final class FeedStore: ObservableObject {
             self.lastRefresh = Date()
             self.isRefreshing = false
             self.save(sorted, key: CacheStore.headlinesKey)
-            if failures == activeFeeds.count { self.errorMessage = "暂时无法获取 RSS，请检查网络或源地址。" }
+            if failures == requestedFeeds.count { self.errorMessage = "本次请求的 RSS 源均刷新失败，已保留原缓存。" }
         }
     }
 
